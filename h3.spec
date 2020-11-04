@@ -1,6 +1,6 @@
 Name:           h3
 Version:        3.7.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        H3 Hexagonal Hierarchical Geospatial Indexing System Package
 Group:          Development/Libraries
 License:        Apache License 2.0
@@ -27,7 +27,7 @@ H3 is a Hexagonal Hierarchical Geospatial Indexing System.
 %build
 mkdir build
 pushd build
-cmake3 -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_DOCS=YES -DBUILD_SHARED_LIBS=true -DCMAKE_INSTALL_LIBDIR=/usr/lib64 -DLIBRARY_OUTPUT_PATH=/usr/lib64 ..
+cmake3 -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_DOCS=YES -DBUILD_SHARED_LIBS=true -DLIB_SUFFIX=64 ..
 make %{?_smp_mflags}
 make docs
 make kml
@@ -40,16 +40,14 @@ popd
 
 %install
 pushd build
-make install DESTDIR=%{buildroot} LIB_SUFFIX=64 LIB_INSTALL_DIR=/usr/lib64
+make install DESTDIR=%{buildroot} LIB_SUFFIX=64
 mkdir -p %{buildroot}%{_datadir}/%{name}/html/
 cp dev-docs/_build/html/* %{buildroot}%{_datadir}/%{name}/html/
 mkdir -p %{buildroot}%{_datadir}/%{name}/kml/
 cp KML/*.kml %{buildroot}%{_datadir}/%{name}/kml/
 #TODO how to do this in cmake/make
 rm -r %{buildroot}%{_prefix}/lib/cmake
-#TODO how to do this in cmake/make
-mv %{buildroot}/usr/lib %{buildroot}/usr/lib64
-find %{buildroot} -type f
+#find %{buildroot} -type f -o -type l 
 popd
 
 %files
