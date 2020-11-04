@@ -2,12 +2,10 @@ Name:           h3
 Version:        3.7.1
 Release:        4%{?dist}
 Summary:        H3 Hexagonal Hierarchical Geospatial Indexing System Package
-
 Group:          Development/Libraries
 License:        Apache License 2.0
 URL:            https://github.com/uber/h3
 Source0:        h3-3.7.1.tar.gz
-
 BuildRequires:  cmake3
 BuildRequires:  make
 BuildRequires:  gcc
@@ -29,7 +27,6 @@ H3 is a Hexagonal Hierarchical Geospatial Indexing System.
 %build
 mkdir build
 pushd build
-#cmake3 -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_CXX_IMPLICIT_LINK_DIRECTORIES=/usr/lib64 -DINSTALL_LIB_DIR=/usr/lib64 -DENABLE_DOCS=YES -DBUILD_SHARED_LIBS=true ..
 cmake3 -DCMAKE_INSTALL_PREFIX=/usr -DENABLE_DOCS=YES -DBUILD_SHARED_LIBS=true -DCMAKE_INSTALL_LIBDIR=/usr/lib64 -DLIBRARY_OUTPUT_PATH=/usr/lib64 ..
 make %{?_smp_mflags}
 make docs
@@ -38,7 +35,7 @@ popd
 
 %check
 pushd build
-#make test
+make test
 popd
 
 %install
