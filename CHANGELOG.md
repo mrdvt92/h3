@@ -7,6 +7,24 @@ The public API of this library consists of the functions declared in file
 
 ## [Unreleased]
 
+### Added
+- Vertex mode and associated functions:
+    - `cellToVertex(cell, vertexNum)`
+    - `cellToVertexes(cell, out)`
+    - `vertexToPoint(vertex, out)` 
+    - `isValidVertex(vertex)` 
+- closed-form implementation of `numHexagons`
+
+### Breaking changes
+- rename functions according to the terminology RFC (#403, #466)
+- `cellToChildrenSize` to output `int64_t` instead of `int`
+- `pointDistRads` to `distanceRads`
+- `pointDistKm` to `distanceKm`
+- `pointDistM` to `distanceM`
+
+### Other changes
+- generally use `lng` instead of `lon`
+
 ## [3.7.1] - 2020-10-05
 ### Fixed
 - Finding invalid edge boundaries should not crash. (#399)

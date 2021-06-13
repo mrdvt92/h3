@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2017, 2019 Uber Technologies, Inc.
+ * Copyright 2016-2017, 2019-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 /** @file
  * @brief generates random cell indexes and the corresponding cell boundaries
  *
- *  See `mkRandGeoBoundary --help` for usage.
+ *  See `mkRandCellBoundary --help` for usage.
  *
- *  The program generates `numPoints` random lat/lon coordinates and outputs
+ *  The program generates `numPoints` random lat/lng coordinates and outputs
  *  them along with the corresponding H3Index at the specified `resolution`.
  */
 
@@ -28,7 +28,7 @@
 #include "args.h"
 #include "utility.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     int res = 0;
     int numPoints = 0;
 
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
         .scanFormat = "%d",
         .valueName = "num",
         .value = &numPoints,
-        .helpText = "Number of random lat/lon pairs to generate."};
+        .helpText = "Number of random lat/lng pairs to generate."};
     Arg resArg = {.names = {"-r", "--resolution"},
                   .required = true,
                   .scanFormat = "%d",
@@ -47,9 +47,9 @@ int main(int argc, char* argv[]) {
                   .value = &res,
                   .helpText = "Resolution, 0-15 inclusive."};
 
-    Arg* args[] = {&helpArg, &numPointsArg, &resArg};
+    Arg *args[] = {&helpArg, &numPointsArg, &resArg};
     const int numArgs = 3;
-    const char* helpText =
+    const char *helpText =
         "Generates random cell indexes and cell boundaries at the specified "
         "resolution.";
 
@@ -64,14 +64,16 @@ int main(int argc, char* argv[]) {
     }
 
     for (int i = 0; i < numPoints; i++) {
-        GeoCoord g;
+        LatLng g;
         randomGeo(&g);
 
-        H3Index h = H3_EXPORT(geoToH3)(&g, res);
-        GeoBoundary b;
-        H3_EXPORT(h3ToGeoBoundary)(h, &b);
+        H3Index h;
+        if (!H3_EXPORT(latLngToCell)(&g, res, &h)) {
+            CellBoundary b;
+            H3_EXPORT(cellToBoundary)(h, &b);
 
-        h3Println(h);
-        geoBoundaryPrintln(&b);
+            h3Println(h);
+            cellBoundaryPrintln(&b);
+        }
     }
 }

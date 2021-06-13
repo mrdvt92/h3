@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Uber Technologies, Inc.
+ * Copyright 2017-2018, 2020-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,54 +21,58 @@
 
 #include <math.h>
 
-#include "geoCoord.h"
+#include "h3Index.h"
 #include "h3api.h"
+#include "latLng.h"
 #include "test.h"
 #include "utility.h"
 
 SUITE(h3Api) {
-    TEST(geoToH3_res) {
-        GeoCoord anywhere = {0, 0};
+    TEST(latLngToCell_res) {
+        H3Index h;
+        LatLng anywhere = {0, 0};
 
-        t_assert(H3_EXPORT(geoToH3)(&anywhere, -1) == 0,
+        t_assert(H3_EXPORT(latLngToCell)(&anywhere, -1, &h) == E_RES_DOMAIN,
                  "resolution below 0 is invalid");
-        t_assert(H3_EXPORT(geoToH3)(&anywhere, 16) == 0,
+        t_assert(H3_EXPORT(latLngToCell)(&anywhere, 16, &h) == E_RES_DOMAIN,
                  "resolution above 15 is invalid");
     }
 
-    TEST(geoToH3_coord) {
-        GeoCoord invalidLat = {NAN, 0};
-        GeoCoord invalidLon = {0, NAN};
-        GeoCoord invalidLatLon = {INFINITY, -INFINITY};
+    TEST(latLngToCell_coord) {
+        H3Index h;
+        LatLng invalidLat = {NAN, 0};
+        LatLng invalidLng = {0, NAN};
+        LatLng invalidLatLng = {INFINITY, -INFINITY};
 
-        t_assert(H3_EXPORT(geoToH3)(&invalidLat, 1) == 0,
+        t_assert(H3_EXPORT(latLngToCell)(&invalidLat, 1, &h) == E_LATLNG_DOMAIN,
                  "invalid latitude is rejected");
-        t_assert(H3_EXPORT(geoToH3)(&invalidLon, 1) == 0,
+        t_assert(H3_EXPORT(latLngToCell)(&invalidLng, 1, &h) == E_LATLNG_DOMAIN,
                  "invalid longitude is rejected");
-        t_assert(H3_EXPORT(geoToH3)(&invalidLatLon, 1) == 0,
-                 "coordinates with infinity are rejected");
+        t_assert(
+            H3_EXPORT(latLngToCell)(&invalidLatLng, 1, &h) == E_LATLNG_DOMAIN,
+            "coordinates with infinity are rejected");
     }
 
-    TEST(h3ToGeoBoundary_classIIIEdgeVertex) {
+    TEST(cellToBoundary_classIIIEdgeVertex) {
         // Bug test for https://github.com/uber/h3/issues/45
-        char* hexes[] = {
+        char *hexes[] = {
             "894cc5349b7ffff", "894cc534d97ffff", "894cc53682bffff",
             "894cc536b17ffff", "894cc53688bffff", "894cead92cbffff",
             "894cc536537ffff", "894cc5acbabffff", "894cc536597ffff"};
         int numHexes = sizeof(hexes) / sizeof(hexes[0]);
         H3Index h3;
-        GeoBoundary b;
+        CellBoundary b;
         for (int i = 0; i < numHexes; i++) {
             h3 = H3_EXPORT(stringToH3)(hexes[i]);
-            H3_EXPORT(h3ToGeoBoundary)(h3, &b);
+            H3_EXPORT(cellToBoundary)(h3, &b);
             t_assert(b.numVerts == 7, "got expected vertex count");
         }
     }
 
-    TEST(h3ToGeoBoundary_classIIIEdgeVertex_exact) {
+    TEST(cellToBoundary_classIIIEdgeVertex_exact) {
         // Bug test for https://github.com/uber/h3/issues/45
         H3Index h3 = H3_EXPORT(stringToH3)("894cc536537ffff");
-        GeoBoundary boundary;
+        CellBoundary boundary;
         boundary.numVerts = 7;
         setGeoDegs(&boundary.verts[0], 18.043333154, -66.27836523500002);
         setGeoDegs(&boundary.verts[1], 18.042238363, -66.27929062800001);
@@ -80,10 +84,10 @@ SUITE(h3Api) {
         t_assertBoundary(h3, &boundary);
     }
 
-    TEST(h3ToGeoBoundary_coslonConstrain) {
+    TEST(cellToBoundary_coslngConstrain) {
         // Bug test for https://github.com/uber/h3/issues/212
         H3Index h3 = 0x87dc6d364ffffffL;
-        GeoBoundary boundary;
+        CellBoundary boundary;
         boundary.numVerts = 6;
         setGeoDegs(&boundary.verts[0], -52.0130533678236091,
                    -34.6232931343713091);
@@ -98,6 +102,20 @@ SUITE(h3Api) {
         setGeoDegs(&boundary.verts[5], -52.0108315681413629,
                    -34.6437571897165668);
         t_assertBoundary(h3, &boundary);
+    }
+
+    TEST(cellToBoundary_failed) {
+        H3Index h = 0x87dc6d364ffffffL;
+        H3_SET_BASE_CELL(h, NUM_BASE_CELLS + 1);
+        CellBoundary gb;
+        t_assert(H3_EXPORT(cellToBoundary(h, &gb) == E_CELL_INVALID),
+                 "cellToBoundary fails on invalid index");
+    }
+
+    TEST(cellToLatLngInvalid) {
+        LatLng coord;
+        H3_EXPORT(cellToLatLng)(0x7fffffffffffffff, &coord);
+        // Test is this should not crash (should return an error in the future)
     }
 
     TEST(version) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Uber Technologies, Inc.
+ * Copyright 2020-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,9 @@
 #include <math.h>
 #include <string.h>
 
-#include "geoCoord.h"
 #include "h3Index.h"
 #include "h3api.h"
+#include "latLng.h"
 #include "test.h"
 #include "utility.h"
 
@@ -44,7 +44,7 @@ void resetMemoryCounters(int permitted) {
     permittedAllocCalls = permitted;
 }
 
-void* test_prefix_malloc(size_t size) {
+void *test_prefix_malloc(size_t size) {
     actualAllocCalls++;
     if (permittedAllocCalls && actualAllocCalls > permittedAllocCalls) {
         failAlloc = true;
@@ -55,7 +55,7 @@ void* test_prefix_malloc(size_t size) {
     return malloc(size);
 }
 
-void* test_prefix_calloc(size_t num, size_t size) {
+void *test_prefix_calloc(size_t num, size_t size) {
     actualAllocCalls++;
     if (permittedAllocCalls && actualAllocCalls > permittedAllocCalls) {
         failAlloc = true;
@@ -66,7 +66,7 @@ void* test_prefix_calloc(size_t num, size_t size) {
     return calloc(num, size);
 }
 
-void* test_prefix_realloc(void* ptr, size_t size) {
+void *test_prefix_realloc(void *ptr, size_t size) {
     actualAllocCalls++;
     if (permittedAllocCalls && actualAllocCalls > permittedAllocCalls) {
         failAlloc = true;
@@ -77,7 +77,7 @@ void* test_prefix_realloc(void* ptr, size_t size) {
     return realloc(ptr, size);
 }
 
-void test_prefix_free(void* ptr) {
+void test_prefix_free(void *ptr) {
     actualFreeCalls++;
     return free(ptr);
 }
@@ -86,78 +86,79 @@ H3Index sunnyvale = 0x89283470c27ffff;
 H3Index pentagon = 0x89080000003ffff;
 
 SUITE(h3Memory) {
-    TEST(kRing) {
+    TEST(gridDisk) {
         int k = 2;
-        int hexCount = H3_EXPORT(maxKringSize)(k);
-        H3Index* kRingOutput = calloc(hexCount, sizeof(H3Index));
+        int hexCount = H3_EXPORT(maxGridDiskSize)(k);
+        H3Index *gridDiskOutput = calloc(hexCount, sizeof(H3Index));
 
         resetMemoryCounters(0);
-        H3_EXPORT(kRing)(sunnyvale, k, kRingOutput);
-        t_assert(actualAllocCalls == 0, "kRing did not call alloc");
-        t_assert(actualFreeCalls == 0, "kRing did not call free");
+        H3_EXPORT(gridDisk)(sunnyvale, k, gridDiskOutput);
+        t_assert(actualAllocCalls == 0, "gridDisk did not call alloc");
+        t_assert(actualFreeCalls == 0, "gridDisk did not call free");
 
         resetMemoryCounters(0);
-        H3_EXPORT(kRing)(pentagon, k, kRingOutput);
-        t_assert(actualAllocCalls == 1, "kRing called alloc");
-        t_assert(actualFreeCalls == 1, "kRing called free");
+        H3_EXPORT(gridDisk)(pentagon, k, gridDiskOutput);
+        t_assert(actualAllocCalls == 1, "gridDisk called alloc");
+        t_assert(actualFreeCalls == 1, "gridDisk called free");
 
         resetMemoryCounters(0);
         failAlloc = true;
-        memset(kRingOutput, 0, hexCount * sizeof(H3Index));
-        H3_EXPORT(kRing)(pentagon, k, kRingOutput);
-        t_assert(actualAllocCalls == 1, "kRing called alloc");
-        t_assert(actualFreeCalls == 0, "kRing did not call free");
+        memset(gridDiskOutput, 0, hexCount * sizeof(H3Index));
+        H3_EXPORT(gridDisk)(pentagon, k, gridDiskOutput);
+        t_assert(actualAllocCalls == 1, "gridDisk called alloc");
+        t_assert(actualFreeCalls == 0, "gridDisk did not call free");
 
         for (int i = 0; i < hexCount; i++) {
-            t_assert(!kRingOutput[i],
-                     "kRing did not produce output without alloc");
+            t_assert(!gridDiskOutput[i],
+                     "gridDisk did not produce output without alloc");
         }
 
-        free(kRingOutput);
+        free(gridDiskOutput);
     }
 
-    TEST(compact) {
+    TEST(compactCells) {
         int k = 9;
-        int hexCount = H3_EXPORT(maxKringSize)(k);
+        int hexCount = H3_EXPORT(maxGridDiskSize)(k);
         int expectedCompactCount = 73;
 
         // Generate a set of hexagons to compact
-        H3Index* sunnyvaleExpanded = calloc(hexCount, sizeof(H3Index));
+        H3Index *sunnyvaleExpanded = calloc(hexCount, sizeof(H3Index));
         resetMemoryCounters(0);
-        H3_EXPORT(kRing)(sunnyvale, k, sunnyvaleExpanded);
-        t_assert(actualAllocCalls == 0, "kRing did not call alloc");
-        t_assert(actualFreeCalls == 0, "kRing did not call free");
+        H3_EXPORT(gridDisk)(sunnyvale, k, sunnyvaleExpanded);
+        t_assert(actualAllocCalls == 0, "gridDisk did not call alloc");
+        t_assert(actualFreeCalls == 0, "gridDisk did not call free");
 
-        H3Index* compressed = calloc(hexCount, sizeof(H3Index));
+        H3Index *compressed = calloc(hexCount, sizeof(H3Index));
 
         resetMemoryCounters(0);
         failAlloc = true;
-        int err = H3_EXPORT(compact)(sunnyvaleExpanded, compressed, hexCount);
-        t_assert(err == COMPACT_ALLOC_FAILED, "malloc failed (1)");
+        H3Error err =
+            H3_EXPORT(compactCells)(sunnyvaleExpanded, compressed, hexCount);
+        t_assert(err == E_MEMORY, "malloc failed (1)");
         t_assert(actualAllocCalls == 1, "alloc called once");
         t_assert(actualFreeCalls == 0, "free not called");
 
         resetMemoryCounters(1);
-        err = H3_EXPORT(compact)(sunnyvaleExpanded, compressed, hexCount);
-        t_assert(err == COMPACT_ALLOC_FAILED, "malloc failed (2)");
+        err = H3_EXPORT(compactCells)(sunnyvaleExpanded, compressed, hexCount);
+        t_assert(err == E_MEMORY, "malloc failed (2)");
         t_assert(actualAllocCalls == 2, "alloc called twice");
         t_assert(actualFreeCalls == 1, "free called once");
 
         resetMemoryCounters(2);
-        err = H3_EXPORT(compact)(sunnyvaleExpanded, compressed, hexCount);
-        t_assert(err == COMPACT_ALLOC_FAILED, "malloc failed (3)");
+        err = H3_EXPORT(compactCells)(sunnyvaleExpanded, compressed, hexCount);
+        t_assert(err == E_MEMORY, "malloc failed (3)");
         t_assert(actualAllocCalls == 3, "alloc called three times");
         t_assert(actualFreeCalls == 2, "free called twice");
 
         resetMemoryCounters(3);
-        err = H3_EXPORT(compact)(sunnyvaleExpanded, compressed, hexCount);
-        t_assert(err == COMPACT_ALLOC_FAILED, "compact failed (4)");
+        err = H3_EXPORT(compactCells)(sunnyvaleExpanded, compressed, hexCount);
+        t_assert(err == E_MEMORY, "compactCells failed (4)");
         t_assert(actualAllocCalls == 4, "alloc called four times");
         t_assert(actualFreeCalls == 3, "free called three times");
 
         resetMemoryCounters(4);
-        err = H3_EXPORT(compact)(sunnyvaleExpanded, compressed, hexCount);
-        t_assert(err == COMPACT_SUCCESS, "compact using successful malloc");
+        err = H3_EXPORT(compactCells)(sunnyvaleExpanded, compressed, hexCount);
+        t_assert(err == E_SUCCESS, "compact using successful malloc");
         t_assert(actualAllocCalls == 4, "alloc called four times");
         t_assert(actualFreeCalls == 4, "free called four times");
 
@@ -167,7 +168,7 @@ SUITE(h3Memory) {
                 count++;
             }
         }
-        t_assert(count == expectedCompactCount, "got expected compacted count");
+        t_assert(count == expectedCompactCount, "got expected compact count");
 
         free(compressed);
         free(sunnyvaleExpanded);

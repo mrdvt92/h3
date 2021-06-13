@@ -1,5 +1,5 @@
 /*
- * Copyright 2017-2018 Uber Technologies, Inc.
+ * Copyright 2017-2018, 2020-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,12 @@
 
 #include <stdio.h>
 
-#include "geoCoord.h"
 #include "h3api.h"
+#include "latLng.h"
 
 extern int globalTestCount;
-extern const char* currentSuiteName;
-extern const char* currentTestName;
+extern const char *currentSuiteName;
+extern const char *currentTestName;
 
 #define t_assert(condition, msg)                                           \
     do {                                                                   \
@@ -41,7 +41,9 @@ extern const char* currentTestName;
         printf(".");                                                       \
     } while (0)
 
-void t_assertBoundary(H3Index h3, const GeoBoundary* b1);
+#define t_assertSuccess(condition) t_assert(!(condition), "expected E_SUCCESS")
+
+void t_assertBoundary(H3Index h3, const CellBoundary *b1);
 
 #define SUITE(NAME)                                         \
     static void runTests(void);                             \

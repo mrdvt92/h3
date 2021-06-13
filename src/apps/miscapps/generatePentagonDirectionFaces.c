@@ -29,7 +29,7 @@ static void generate() {
     H3Index pentagons[NUM_PENTAGONS] = {0};
     // Get the res 2 pentagons, whose neighbors have the same base cell
     // and are unambiguously on the correct faces
-    H3_EXPORT(getPentagonIndexes)(2, pentagons);
+    H3_EXPORT(getPentagons)(2, pentagons);
 
     printf(
         "static const PentagonDirectionFaces "
@@ -38,7 +38,7 @@ static void generate() {
 
     for (int i = 0; i < NUM_PENTAGONS; i++) {
         H3Index pentagon = pentagons[i];
-        int baseCell = H3_EXPORT(h3GetBaseCell)(pentagon);
+        int baseCell = H3_EXPORT(getBaseCellNumber)(pentagon);
         printf("    {%d, {", baseCell);
         // Get the neighbors in each direction, in order
         FaceIJK fijk;
@@ -56,7 +56,7 @@ static void generate() {
     printf("};\n");
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
     // check command line args
     if (argc > 1) {
         fprintf(stderr, "usage: %s\n", argv[0]);

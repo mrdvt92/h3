@@ -1,4 +1,4 @@
-# Copyright 2017-2020 Uber Technologies, Inc.
+# Copyright 2017-2021 Uber Technologies, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ cmake_minimum_required(VERSION 3.1)
 set(H3_PREFIX "" CACHE STRING "Prefix for exported symbols")
 set(H3_ALLOC_PREFIX "" CACHE STRING "Prefix for allocation functions")
 
+# Do not try to append extensions to source files
+cmake_policy(SET CMP0115 NEW)
 # Needed due to CMP0042
 set(CMAKE_MACOSX_RPATH 1)
-# H3 doesn't export selected symbols right now
-set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 # YCM needs compilation database
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -29,8 +29,19 @@ set(CMAKE_TOOLCHAIN_FILE "${CMAKE_CURRENT_SOURCE_DIR}/cmake/toolchain.cmake"
     CACHE FILEPATH
     "Toolchain to use for building this project")
 
+# Some misc apps do not work with shared libraries on Windows
+# because they require access to internal H3 functions. Build these
+# using either static libraries or an option to expose all
+# function symbols.
+if(NOT (WIN32 AND BUILD_SHARED_LIBS))
+    set(ENABLE_REQUIRES_ALL_SYMBOLS ON)
+else()
+    set(ENABLE_REQUIRES_ALL_SYMBOLS OFF)
+endif()
+
 option(ENABLE_COVERAGE "Enable compiling tests with coverage." ON)
 option(BUILD_BENCHMARKS "Build benchmarking applications." ON)
+option(BUILD_FUZZERS "Build fuzzer applications (for use with afl)." ON)
 option(BUILD_FILTERS "Build filter applications." ON)
 option(BUILD_GENERATORS "Build code generation applications." ON)
 
@@ -96,8 +107,8 @@ set(LIB_SOURCE_FILES
     src/h3lib/include/polygon.h
     src/h3lib/include/polygonAlgos.h
     src/h3lib/include/h3Index.h
-    src/h3lib/include/h3UniEdge.h
-    src/h3lib/include/geoCoord.h
+    src/h3lib/include/directedEdge.h
+    src/h3lib/include/latLng.h
     src/h3lib/include/vec2d.h
     src/h3lib/include/vec3d.h
     src/h3lib/include/linkedGeo.h
@@ -106,6 +117,7 @@ set(LIB_SOURCE_FILES
     src/h3lib/include/faceijk.h
     src/h3lib/include/vertexGraph.h
     src/h3lib/include/mathExtensions.h
+    src/h3lib/include/iterators.h
     src/h3lib/include/constants.h
     src/h3lib/include/coordijk.h
     src/h3lib/include/algos.h
@@ -119,97 +131,104 @@ set(LIB_SOURCE_FILES
     src/h3lib/lib/vertex.c
     src/h3lib/lib/linkedGeo.c
     src/h3lib/lib/localij.c
-    src/h3lib/lib/geoCoord.c
-    src/h3lib/lib/h3UniEdge.c
+    src/h3lib/lib/latLng.c
+    src/h3lib/lib/directedEdge.c
     src/h3lib/lib/mathExtensions.c
+    src/h3lib/lib/iterators.c
     src/h3lib/lib/vertexGraph.c
     src/h3lib/lib/faceijk.c
     src/h3lib/lib/baseCells.c)
 set(APP_SOURCE_FILES
-    src/apps/applib/include/test.h
     src/apps/applib/include/kml.h
     src/apps/applib/include/benchmark.h
     src/apps/applib/include/utility.h
     src/apps/applib/include/args.h
-    src/apps/applib/lib/test.c
     src/apps/applib/lib/kml.c
     src/apps/applib/lib/utility.c
     src/apps/applib/lib/args.c)
+set(TEST_APP_SOURCE_FILES
+    src/apps/applib/include/test.h
+    src/apps/applib/lib/test.c)
 set(EXAMPLE_SOURCE_FILES
     examples/index.c
     examples/distance.c
     examples/neighbors.c
-    examples/compact.c
+    examples/compactCells.c
     examples/edge.c)
 set(OTHER_SOURCE_FILES
-    src/apps/filters/h3ToGeo.c
+    src/apps/filters/cellToLatLng.c
     src/apps/filters/h3ToLocalIj.c
     src/apps/filters/localIjToH3.c
     src/apps/filters/h3ToComponents.c
-    src/apps/filters/geoToH3.c
-    src/apps/filters/h3ToGeoBoundary.c
-    src/apps/filters/kRing.c
-    src/apps/filters/hexRange.c
+    src/apps/filters/latLngToCell.c
+    src/apps/filters/cellToBoundary.c
+    src/apps/filters/gridDisk.c
+    src/apps/filters/gridDiskUnsafe.c
     src/apps/testapps/testVertexGraph.c
-    src/apps/testapps/testCompact.c
-    src/apps/testapps/testPolyfill.c
-    src/apps/testapps/testPolyfillReported.c
+    src/apps/testapps/testCompactCells.c
+    src/apps/testapps/testPolygonToCells.c
+    src/apps/testapps/testPolygonToCellsReported.c
     src/apps/testapps/testPentagonIndexes.c
-    src/apps/testapps/testKRing.c
-    src/apps/testapps/testH3ToGeoBoundary.c
-    src/apps/testapps/testH3ToParent.c
+    src/apps/testapps/testGridDisk.c
+    src/apps/testapps/testCellToBoundary.c
+    src/apps/testapps/testCellToParent.c
     src/apps/testapps/testH3Index.c
     src/apps/testapps/mkRandGeoBoundary.c
-    src/apps/testapps/testGeoToH3.c
+    src/apps/testapps/testLatLngToCell.c
     src/apps/testapps/testH3NeighborRotations.c
-    src/apps/testapps/testMaxH3ToChildrenSize.c
-    src/apps/testapps/testHexRanges.c
-    src/apps/testapps/testH3ToGeo.c
-    src/apps/testapps/testH3ToCenterChild.c
-    src/apps/testapps/testH3ToChildren.c
-    src/apps/testapps/testH3GetFaces.c
-    src/apps/testapps/testGeoCoord.c
-    src/apps/testapps/testHexRing.c
+    src/apps/testapps/testCellToChildrenSize.c
+    src/apps/testapps/testGridDisksUnsafe.c
+    src/apps/testapps/testCellToLatLng.c
+    src/apps/testapps/testCellToCenterChild.c
+    src/apps/testapps/testCellToChildren.c
+    src/apps/testapps/testGetIcosahedronFaces.c
+    src/apps/testapps/testLatLng.c
+    src/apps/testapps/testGridRingUnsafe.c
     src/apps/testapps/testH3SetToVertexGraph.c
     src/apps/testapps/testBBox.c
     src/apps/testapps/testVertex.c
+    src/apps/testapps/testVertexExhaustive.c
     src/apps/testapps/testPolygon.c
     src/apps/testapps/testVec2d.c
     src/apps/testapps/testVec3d.c
-    src/apps/testapps/testH3UniEdge.c
-    src/apps/testapps/testH3UniEdgeExhaustive.c
+    src/apps/testapps/testDirectedEdge.c
+    src/apps/testapps/testDirectedEdgeExhaustive.c
     src/apps/testapps/testLinkedGeo.c
     src/apps/testapps/mkRandGeo.c
     src/apps/testapps/testH3Api.c
     src/apps/testapps/testH3SetToLinkedGeo.c
     src/apps/testapps/testH3ToLocalIj.c
     src/apps/testapps/testH3ToLocalIjExhaustive.c
-    src/apps/testapps/testH3Distance.c
-    src/apps/testapps/testH3DistanceExhaustive.c
-    src/apps/testapps/testH3Line.c
-    src/apps/testapps/testH3LineExhaustive.c
+    src/apps/testapps/testGridDistance.c
+    src/apps/testapps/testGridDistanceExhaustive.c
+    src/apps/testapps/testGridPathCells.c
+    src/apps/testapps/testGridPathCellsExhaustive.c
     src/apps/testapps/testH3CellArea.c
     src/apps/testapps/testH3CellAreaExhaustive.c
     src/apps/testapps/testCoordIj.c
     src/apps/testapps/testCoordIjk.c
     src/apps/testapps/testH3Memory.c
-    src/apps/miscapps/h3ToGeoBoundaryHier.c
-    src/apps/miscapps/h3ToGeoHier.c
+    src/apps/testapps/testH3Iterators.c
+    src/apps/miscapps/cellToBoundaryHier.c
+    src/apps/miscapps/cellToLatLngHier.c
     src/apps/miscapps/generateBaseCellNeighbors.c
     src/apps/miscapps/generatePentagonDirectionFaces.c
-    src/apps/miscapps/generateNumHexagons.c
     src/apps/miscapps/generateFaceCenterPoint.c
     src/apps/miscapps/h3ToHier.c
-    src/apps/benchmarks/benchmarkPolyfill.c
+    src/apps/fuzzers/fuzzerLatLngToCell.c
+    src/apps/fuzzers/fuzzerCellToLatLng.c
+    src/apps/fuzzers/fuzzerGridDisk.c
+    src/apps/benchmarks/benchmarkPolygonToCells.c
     src/apps/benchmarks/benchmarkPolygon.c
     src/apps/benchmarks/benchmarkH3SetToLinkedGeo.c
-    src/apps/benchmarks/benchmarkKRing.c
-    src/apps/benchmarks/benchmarkH3Line.c
-    src/apps/benchmarks/benchmarkH3UniEdge.c
+    src/apps/benchmarks/benchmarkGridDiskCells.c
+    src/apps/benchmarks/benchmarkGridPathCells.c
+    src/apps/benchmarks/benchmarkDirectedEdge.c
+    src/apps/benchmarks/benchmarkVertex.c
     src/apps/benchmarks/benchmarkH3Api.c)
 
 set(ALL_SOURCE_FILES
-    ${LIB_SOURCE_FILES} ${APP_SOURCE_FILES} ${OTHER_SOURCE_FILES})
+    ${LIB_SOURCE_FILES} ${APP_SOURCE_FILES} ${TEST_APP_SOURCE_FILES} ${OTHER_SOURCE_FILES})
 
 set(UNCONFIGURED_API_HEADER src/h3lib/include/h3api.h.in)
 set(CONFIGURED_API_HEADER src/h3lib/include/h3api.h)
@@ -230,9 +249,11 @@ function(add_h3_library name h3_alloc_prefix_override)
 
     if(BUILD_SHARED_LIBS)
         set_target_properties(${name} PROPERTIES SOVERSION ${H3_SOVERSION})
+        target_compile_definitions(${name} PRIVATE BUILD_SHARED_LIBS=1)
     endif()
 
     target_compile_definitions(${name} PUBLIC H3_PREFIX=${H3_PREFIX})
+    target_compile_definitions(${name} PRIVATE BUILDING_H3=1)
     set(has_alloc_prefix NO)
     if(h3_alloc_prefix_override)
         set(has_alloc_prefix YES)
@@ -242,9 +263,11 @@ function(add_h3_library name h3_alloc_prefix_override)
         target_compile_definitions(${name} PUBLIC H3_ALLOC_PREFIX=${H3_ALLOC_PREFIX})
     endif()
     # Mac OSX defaults to not looking up undefined symbols dynamically,
-    # so enable that explicitly.
+    # so enable that explicitly. Windows needs something similar.
     if(has_alloc_prefix AND APPLE)
         target_link_libraries(${name} PRIVATE "-undefined dynamic_lookup")
+    elseif(has_alloc_prefix AND MSVC)
+        set(TARGET ${name} PROPERTY APPEND LINK_FLAGS "/FORCE:UNRESOLVED")
     endif()
 
     if(have_alloca)
@@ -338,12 +361,6 @@ add_custom_target(update-version
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
 
-# Website publishing
-add_custom_target(publish-website
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/publish_website.sh
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-
 # Link all executables against H3
 macro(add_h3_executable name)
     # invoke built-in add_executable
@@ -363,16 +380,16 @@ if(BUILD_FILTERS)
         list(APPEND INSTALL_TARGETS ${name})
     endmacro()
 
-    add_h3_filter(geoToH3 src/apps/filters/geoToH3.c ${APP_SOURCE_FILES})
+    add_h3_filter(latLngToCell src/apps/filters/latLngToCell.c ${APP_SOURCE_FILES})
     add_h3_filter(h3ToComponents src/apps/filters/h3ToComponents.c ${APP_SOURCE_FILES})
-    add_h3_filter(h3ToGeo src/apps/filters/h3ToGeo.c ${APP_SOURCE_FILES})
+    add_h3_filter(cellToLatLng src/apps/filters/cellToLatLng.c ${APP_SOURCE_FILES})
     add_h3_filter(h3ToLocalIj src/apps/filters/h3ToLocalIj.c ${APP_SOURCE_FILES})
     add_h3_filter(localIjToH3 src/apps/filters/localIjToH3.c ${APP_SOURCE_FILES})
-    add_h3_filter(h3ToGeoBoundary src/apps/filters/h3ToGeoBoundary.c ${APP_SOURCE_FILES})
-    add_h3_filter(hexRange src/apps/filters/hexRange.c ${APP_SOURCE_FILES})
-    add_h3_filter(kRing src/apps/filters/kRing.c ${APP_SOURCE_FILES})
-    add_h3_filter(h3ToGeoBoundaryHier src/apps/miscapps/h3ToGeoBoundaryHier.c ${APP_SOURCE_FILES})
-    add_h3_filter(h3ToGeoHier src/apps/miscapps/h3ToGeoHier.c ${APP_SOURCE_FILES})
+    add_h3_filter(cellToBoundary src/apps/filters/cellToBoundary.c ${APP_SOURCE_FILES})
+    add_h3_filter(gridDiskUnsafe src/apps/filters/gridDiskUnsafe.c ${APP_SOURCE_FILES})
+    add_h3_filter(gridDisk src/apps/filters/gridDisk.c ${APP_SOURCE_FILES})
+    add_h3_filter(cellToBoundaryHier src/apps/miscapps/cellToBoundaryHier.c ${APP_SOURCE_FILES})
+    add_h3_filter(cellToLatLngHier src/apps/miscapps/cellToLatLngHier.c ${APP_SOURCE_FILES})
     add_h3_filter(h3ToHier src/apps/miscapps/h3ToHier.c ${APP_SOURCE_FILES})
 
     # Generate KML files for visualizing the H3 grid
@@ -386,11 +403,11 @@ if(BUILD_FILTERS)
         set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "KML/res${resolution}cells.kml")
         set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES "KML/res${resolution}centers.kml")
         add_custom_target(kml_cells_${resolution}
-            COMMAND ${SHELL} "$<TARGET_FILE:h3ToHier> -r ${resolution} | $<TARGET_FILE:h3ToGeoBoundary> --kml --kml-name res${resolution}cells.kml --kml-description \"Res ${resolution} Cells\" > KML/res${resolution}cells.kml"
+            COMMAND ${SHELL} "$<TARGET_FILE:h3ToHier> -r ${resolution} | $<TARGET_FILE:cellToBoundary> --kml --kml-name res${resolution}cells.kml --kml-description \"Res ${resolution} Cells\" > KML/res${resolution}cells.kml"
             VERBATIM
             DEPENDS create-kml-dir)
         add_custom_target(kml_centers_${resolution}
-            COMMAND ${SHELL} "$<TARGET_FILE:h3ToHier> -r ${resolution} | $<TARGET_FILE:h3ToGeo> --kml --kml-name res${resolution}centers.kml --kml-description \"Res ${resolution} Centers\" > KML/res${resolution}centers.kml"
+            COMMAND ${SHELL} "$<TARGET_FILE:h3ToHier> -r ${resolution} | $<TARGET_FILE:cellToLatLng> --kml --kml-name res${resolution}centers.kml --kml-description \"Res ${resolution} Centers\" > KML/res${resolution}centers.kml"
             VERBATIM
             DEPENDS create-kml-dir)
         add_dependencies(kml
@@ -399,12 +416,11 @@ if(BUILD_FILTERS)
     endforeach()
 endif()
 
-if(BUILD_GENERATORS)
+if(BUILD_GENERATORS AND ENABLE_REQUIRES_ALL_SYMBOLS)
     # Code generation
     add_h3_executable(generateBaseCellNeighbors src/apps/miscapps/generateBaseCellNeighbors.c ${APP_SOURCE_FILES})
-    add_h3_executable(generatePentagonDirectionFaces src/apps/miscapps/generatePentagonDirectionFaces.c ${APP_SOURCE_FILES})
-    add_h3_executable(generateNumHexagons src/apps/miscapps/generateNumHexagons.c ${APP_SOURCE_FILES})
     add_h3_executable(generateFaceCenterPoint src/apps/miscapps/generateFaceCenterPoint.c ${APP_SOURCE_FILES})
+    add_h3_executable(generatePentagonDirectionFaces src/apps/miscapps/generatePentagonDirectionFaces.c ${APP_SOURCE_FILES})
 
     # Miscellaneous testing applications - generating random data
     add_h3_executable(mkRandGeo src/apps/testapps/mkRandGeo.c ${APP_SOURCE_FILES})
@@ -412,6 +428,7 @@ if(BUILD_GENERATORS)
 endif()
 
 if(H3_IS_ROOT_PROJECT AND BUILD_TESTING)
+    option(BUILD_ALLOC_TESTS "Build tests for custom allocation functions" ON)
     option(PRINT_TEST_FILES "Print which test files correspond to which tests" OFF)
 
     include(TestWrapValgrind)
@@ -436,13 +453,11 @@ if(H3_IS_ROOT_PROJECT AND BUILD_TESTING)
             )
     endif()
 
-    add_h3_library(h3WithTestAllocators test_prefix_)
-
     macro(add_h3_memory_test name srcfile)
         # Like other test code, but these need to be linked against
         # a different copy of the H3 library which has known intercepted
         # allocator functions.
-        add_executable(${ARGV} ${APP_SOURCE_FILES})
+        add_executable(${ARGV} ${APP_SOURCE_FILES} ${TEST_APP_SOURCE_FILES})
 
         if(TARGET ${name})
             target_link_libraries(${name} PUBLIC h3WithTestAllocators)
@@ -470,7 +485,7 @@ if(H3_IS_ROOT_PROJECT AND BUILD_TESTING)
     macro(add_h3_test_common name srcfile)
         # need to actually make the test target
         if(NOT TARGET ${name})
-            add_h3_executable(${name} ${srcfile} ${APP_SOURCE_FILES})
+            add_h3_executable(${name} ${srcfile} ${APP_SOURCE_FILES} ${TEST_APP_SOURCE_FILES})
         endif()
 
         math(EXPR test_number "${test_number}+1")
@@ -537,56 +552,57 @@ if(H3_IS_ROOT_PROJECT AND BUILD_TESTING)
     # Add each individual test
     file(GLOB all_centers tests/inputfiles/bc*centers.txt)
     foreach(file ${all_centers})
-        add_h3_test_with_file(testH3ToGeo src/apps/testapps/testH3ToGeo.c ${file})
+        add_h3_test_with_file(testLatLngToCell src/apps/testapps/testLatLngToCell.c ${file})
     endforeach()
 
     file(GLOB all_ic_files tests/inputfiles/res*ic.txt)
     foreach(file ${all_ic_files})
-        add_h3_test_with_file(testH3ToGeo src/apps/testapps/testH3ToGeo.c ${file})
+        add_h3_test_with_file(testCellToLatLng src/apps/testapps/testCellToLatLng.c ${file})
     endforeach()
 
     file(GLOB all_centers tests/inputfiles/rand*centers.txt)
     foreach(file ${all_centers})
-        add_h3_test_with_file(testGeoToH3 src/apps/testapps/testGeoToH3.c ${file})
+        add_h3_test_with_file(testLatLngToCell src/apps/testapps/testLatLngToCell.c ${file})
     endforeach()
 
     file(GLOB all_cells tests/inputfiles/*cells.txt)
     foreach(file ${all_cells})
-        add_h3_test_with_file(testH3ToGeoBoundary src/apps/testapps/testH3ToGeoBoundary.c ${file})
+        add_h3_test_with_file(testCellToBoundary src/apps/testapps/testCellToBoundary.c ${file})
     endforeach()
 
-    add_h3_test(testCompact src/apps/testapps/testCompact.c)
-    add_h3_test(testKRing src/apps/testapps/testKRing.c)
-    add_h3_test(testHexRing src/apps/testapps/testHexRing.c)
-    add_h3_test(testHexRanges src/apps/testapps/testHexRanges.c)
-    add_h3_test(testH3ToParent src/apps/testapps/testH3ToParent.c)
-    add_h3_test(testH3ToCenterChild src/apps/testapps/testH3ToCenterChild.c)
-    add_h3_test(testH3ToChildren src/apps/testapps/testH3ToChildren.c)
-    add_h3_test(testH3GetFaces src/apps/testapps/testH3GetFaces.c)
-    add_h3_test(testMaxH3ToChildrenSize src/apps/testapps/testMaxH3ToChildrenSize.c)
+    add_h3_test(testCompactCells src/apps/testapps/testCompactCells.c)
+    add_h3_test(testGridDisk src/apps/testapps/testGridDisk.c)
+    add_h3_test(testGridRingUnsafe src/apps/testapps/testGridRingUnsafe.c)
+    add_h3_test(testGridDisksUnsafe src/apps/testapps/testGridDisksUnsafe.c)
+    add_h3_test(testCellToParent src/apps/testapps/testCellToParent.c)
+    add_h3_test(testCellToCenterChild src/apps/testapps/testCellToCenterChild.c)
+    add_h3_test(testCellToChildren src/apps/testapps/testCellToChildren.c)
+    add_h3_test(testGetIcosahedronFaces src/apps/testapps/testGetIcosahedronFaces.c)
+    add_h3_test(testCellToChildrenSize src/apps/testapps/testCellToChildrenSize.c)
     add_h3_test(testH3Index src/apps/testapps/testH3Index.c)
     add_h3_test(testH3Api src/apps/testapps/testH3Api.c)
     add_h3_test(testH3SetToLinkedGeo src/apps/testapps/testH3SetToLinkedGeo.c)
     add_h3_test(testH3SetToVertexGraph src/apps/testapps/testH3SetToVertexGraph.c)
     add_h3_test(testLinkedGeo src/apps/testapps/testLinkedGeo.c)
-    add_h3_test(testPolyfill src/apps/testapps/testPolyfill.c)
-    add_h3_test(testPolyfillReported src/apps/testapps/testPolyfillReported.c)
+    add_h3_test(testPolygonToCells src/apps/testapps/testPolygonToCells.c)
+    add_h3_test(testPolygonToCellsReported src/apps/testapps/testPolygonToCellsReported.c)
     add_h3_test(testVertexGraph src/apps/testapps/testVertexGraph.c)
-    add_h3_test(testH3UniEdge src/apps/testapps/testH3UniEdge.c)
-    add_h3_test(testGeoCoord src/apps/testapps/testGeoCoord.c)
+    add_h3_test(testDirectedEdge src/apps/testapps/testDirectedEdge.c)
+    add_h3_test(testLatLng src/apps/testapps/testLatLng.c)
     add_h3_test(testBBox src/apps/testapps/testBBox.c)
     add_h3_test(testVertex src/apps/testapps/testVertex.c)
     add_h3_test(testPolygon src/apps/testapps/testPolygon.c)
     add_h3_test(testVec2d src/apps/testapps/testVec2d.c)
     add_h3_test(testVec3d src/apps/testapps/testVec3d.c)
     add_h3_test(testH3ToLocalIj src/apps/testapps/testH3ToLocalIj.c)
-    add_h3_test(testH3Distance src/apps/testapps/testH3Distance.c)
-    add_h3_test(testH3Line src/apps/testapps/testH3Line.c)
+    add_h3_test(testGridDistance src/apps/testapps/testGridDistance.c)
+    add_h3_test(testGridPathCells src/apps/testapps/testGridPathCells.c)
     add_h3_test(testH3CellArea src/apps/testapps/testH3CellArea.c)
     add_h3_test(testCoordIj src/apps/testapps/testCoordIj.c)
     add_h3_test(testCoordIjk src/apps/testapps/testCoordIjk.c)
     add_h3_test(testBaseCells src/apps/testapps/testBaseCells.c)
     add_h3_test(testPentagonIndexes src/apps/testapps/testPentagonIndexes.c)
+    add_h3_test(testH3Iterators src/apps/testapps/testH3Iterators.c)
 
     add_h3_test_with_arg(testH3NeighborRotations src/apps/testapps/testH3NeighborRotations.c 0)
     add_h3_test_with_arg(testH3NeighborRotations src/apps/testapps/testH3NeighborRotations.c 1)
@@ -594,15 +610,33 @@ if(H3_IS_ROOT_PROJECT AND BUILD_TESTING)
 
     # The "Exhaustive" part of the test name is used by the test-fast to exclude these files.
     # test-fast exists so that Travis CI can run Valgrind on tests without taking a very long time.
-    add_h3_test(testH3UniEdgeExhaustive src/apps/testapps/testH3UniEdgeExhaustive.c)
+    add_h3_test(testDirectedEdgeExhaustive src/apps/testapps/testDirectedEdgeExhaustive.c)
+    add_h3_test(testVertexExhaustive src/apps/testapps/testVertexExhaustive.c)
     add_h3_test(testH3ToLocalIjExhaustive src/apps/testapps/testH3ToLocalIjExhaustive.c)
-    add_h3_test(testH3LineExhaustive src/apps/testapps/testH3LineExhaustive.c)
-    add_h3_test(testH3DistanceExhaustive src/apps/testapps/testH3DistanceExhaustive.c)
+    add_h3_test(testGridPathCellsExhaustive src/apps/testapps/testGridPathCellsExhaustive.c)
+    add_h3_test(testGridDistanceExhaustive src/apps/testapps/testGridDistanceExhaustive.c)
     add_h3_test(testH3CellAreaExhaustive src/apps/testapps/testH3CellAreaExhaustive.c)
 
-    add_h3_memory_test(testH3Memory src/apps/testapps/testH3Memory.c)
+    if(BUILD_ALLOC_TESTS)
+        add_h3_library(h3WithTestAllocators test_prefix_)
+
+        add_h3_memory_test(testH3Memory src/apps/testapps/testH3Memory.c)
+    endif()
 
     add_custom_target(test-fast COMMAND ctest -E Exhaustive)
+endif()
+
+if(BUILD_FUZZERS)
+    add_custom_target(fuzzers)
+
+    macro(add_h3_fuzzer name srcfile)
+        add_h3_executable(${name} ${srcfile} ${APP_SOURCE_FILES})
+        add_dependencies(fuzzers ${name})
+    endmacro()
+
+    add_h3_fuzzer(fuzzerLatLngToCell src/apps/fuzzers/fuzzerLatLngToCell.c)
+    add_h3_fuzzer(fuzzerCellToLatLng src/apps/fuzzers/fuzzerCellToLatLng.c)
+    add_h3_fuzzer(fuzzerGridDisk src/apps/fuzzers/fuzzerGridDisk.c)
 endif()
 
 if(BUILD_BENCHMARKS)
@@ -616,12 +650,15 @@ if(BUILD_BENCHMARKS)
     endmacro()
 
     add_h3_benchmark(benchmarkH3Api src/apps/benchmarks/benchmarkH3Api.c)
-    add_h3_benchmark(benchmarkKRing src/apps/benchmarks/benchmarkKRing.c)
-    add_h3_benchmark(benchmarkH3Line src/apps/benchmarks/benchmarkH3Line.c)
-    add_h3_benchmark(benchmarkH3UniEdge src/apps/benchmarks/benchmarkH3UniEdge.c)
+    add_h3_benchmark(benchmarkGridDiskCells src/apps/benchmarks/benchmarkGridDiskCells.c)
+    add_h3_benchmark(benchmarkGridPathCells src/apps/benchmarks/benchmarkGridPathCells.c)
+    add_h3_benchmark(benchmarkDirectedEdge src/apps/benchmarks/benchmarkDirectedEdge.c)
+    add_h3_benchmark(benchmarkVertex src/apps/benchmarks/benchmarkVertex.c)
     add_h3_benchmark(benchmarkH3SetToLinkedGeo src/apps/benchmarks/benchmarkH3SetToLinkedGeo.c)
-    add_h3_benchmark(benchmarkPolyfill src/apps/benchmarks/benchmarkPolyfill.c)
-    add_h3_benchmark(benchmarkPolygon src/apps/benchmarks/benchmarkPolygon.c)
+    add_h3_benchmark(benchmarkPolygonToCells src/apps/benchmarks/benchmarkPolygonToCells.c)
+    if(ENABLE_REQUIRES_ALL_SYMBOLS)
+        add_h3_benchmark(benchmarkPolygon src/apps/benchmarks/benchmarkPolygon.c)
+    endif()
 endif()
 
 # Installation (https://github.com/forexample/package-example)

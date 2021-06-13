@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2019 Uber Technologies, Inc.
+ * Copyright 2018-2020 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -128,7 +128,7 @@ const bool FAILED_DIRECTIONS[7][7] = {
  * @param out ijk+ coordinates of the index will be placed here on success
  * @return 0 on success, or another value on failure.
  */
-int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
+int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK *out) {
     int res = H3_GET_RESOLUTION(origin);
 
     if (res != H3_GET_RESOLUTION(h3)) {
@@ -137,6 +137,16 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
 
     int originBaseCell = H3_GET_BASE_CELL(origin);
     int baseCell = H3_GET_BASE_CELL(h3);
+
+    if (originBaseCell < 0 ||  // LCOV_EXCL_BR_LINE
+        originBaseCell >= NUM_BASE_CELLS) {
+        // Base cells less than zero can not be represented in an index
+        return 1;
+    }
+    if (baseCell < 0 || baseCell >= NUM_BASE_CELLS) {  // LCOV_EXCL_BR_LINE
+        // Base cells less than zero can not be represented in an index
+        return 1;
+    }
 
     // Direction from origin base cell to index base cell
     Direction dir = CENTER_DIGIT;
@@ -220,7 +230,7 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
         _neighbor(&offset, dir);
         // Scale offset based on resolution
         for (int r = res - 1; r >= 0; r--) {
-            if (isResClassIII(r + 1)) {
+            if (isResolutionClassIII(r + 1)) {
                 // rotate ccw
                 _downAp7(&offset);
             } else {
@@ -277,9 +287,14 @@ int h3ToLocalIjk(H3Index origin, H3Index h3, CoordIJK* out) {
  * @param out The index will be placed here on success
  * @return 0 on success, or another value on failure.
  */
-int localIjkToH3(H3Index origin, const CoordIJK* ijk, H3Index* out) {
+int localIjkToH3(H3Index origin, const CoordIJK *ijk, H3Index *out) {
     int res = H3_GET_RESOLUTION(origin);
     int originBaseCell = H3_GET_BASE_CELL(origin);
+    if (originBaseCell < 0 ||  // LCOV_EXCL_BR_LINE
+        originBaseCell >= NUM_BASE_CELLS) {
+        // Base cells less than zero can not be represented in an index
+        return 1;
+    }
     int originOnPent = _isBaseCellPentagon(originBaseCell);
 
     // This logic is very similar to faceIjkToH3
@@ -316,7 +331,7 @@ int localIjkToH3(H3Index origin, const CoordIJK* ijk, H3Index* out) {
     for (int r = res - 1; r >= 0; r--) {
         CoordIJK lastIJK = ijkCopy;
         CoordIJK lastCenter;
-        if (isResClassIII(r + 1)) {
+        if (isResolutionClassIII(r + 1)) {
             // rotate ccw
             _upAp7(&ijkCopy);
             lastCenter = ijkCopy;
@@ -471,7 +486,7 @@ int localIjkToH3(H3Index origin, const CoordIJK* ijk, H3Index* out) {
  * @return 0 on success, or another value on failure.
  */
 int H3_EXPORT(experimentalH3ToLocalIj)(H3Index origin, H3Index h3,
-                                       CoordIJ* out) {
+                                       CoordIJ *out) {
     // This function is currently experimental. Once ready to be part of the
     // non-experimental API, this function (with the experimental prefix) will
     // be marked as deprecated and to be removed in the next major version. It
@@ -504,8 +519,8 @@ int H3_EXPORT(experimentalH3ToLocalIj)(H3Index origin, H3Index h3,
  * @param index Index will be placed here on success.
  * @return 0 on success, or another value on failure.
  */
-int H3_EXPORT(experimentalLocalIjToH3)(H3Index origin, const CoordIJ* ij,
-                                       H3Index* out) {
+int H3_EXPORT(experimentalLocalIjToH3)(H3Index origin, const CoordIJ *ij,
+                                       H3Index *out) {
     // This function is currently experimental. Once ready to be part of the
     // non-experimental API, this function (with the experimental prefix) will
     // be marked as deprecated and to be removed in the next major version. It
@@ -528,7 +543,7 @@ int H3_EXPORT(experimentalLocalIjToH3)(H3Index origin, const CoordIJ* ij,
  * @return The distance, or a negative number if the library could not
  * compute the distance.
  */
-int H3_EXPORT(h3Distance)(H3Index origin, H3Index h3) {
+int H3_EXPORT(gridDistance)(H3Index origin, H3Index h3) {
     CoordIJK originIjk, h3Ijk;
     if (h3ToLocalIjk(origin, origin, &originIjk)) {
         // Currently there are no tests that would cause getting the coordinates
@@ -552,8 +567,8 @@ int H3_EXPORT(h3Distance)(H3Index origin, H3Index h3) {
  * @return Size of the line, or a negative number if the line cannot
  * be computed.
  */
-int H3_EXPORT(h3LineSize)(H3Index start, H3Index end) {
-    int distance = H3_EXPORT(h3Distance)(start, end);
+int H3_EXPORT(gridPathCellsSize)(H3Index start, H3Index end) {
+    int distance = H3_EXPORT(gridDistance)(start, end);
     return distance >= 0 ? distance + 1 : distance;
 }
 
@@ -565,7 +580,7 @@ int H3_EXPORT(h3LineSize)(H3Index start, H3Index end) {
  * @param k   Floating-point K coord
  * @param ijk IJK coord struct, modified in place
  */
-static void cubeRound(double i, double j, double k, CoordIJK* ijk) {
+static void cubeRound(double i, double j, double k, CoordIJK *ijk) {
     int ri = round(i);
     int rj = round(j);
     int rk = round(k);
@@ -599,18 +614,18 @@ static void cubeRound(double i, double j, double k, CoordIJK* ijk) {
  *
  *  - The specific output of this function should not be considered stable
  *    across library versions. The only guarantees the library provides are
- *    that the line length will be `h3Distance(start, end) + 1` and that
+ *    that the line length will be `gridDistance(start, end) + 1` and that
  *    every index in the line will be a neighbor of the preceding index.
  *  - Lines are drawn in grid space, and may not correspond exactly to either
  *    Cartesian lines or great arcs.
  *
  * @param start Start index of the line
  * @param end End index of the line
- * @param out Output array, which must be of size h3LineSize(start, end)
+ * @param out Output array, which must be of size gridPathCellsSize(start, end)
  * @return 0 on success, or another value on failure.
  */
-int H3_EXPORT(h3Line)(H3Index start, H3Index end, H3Index* out) {
-    int distance = H3_EXPORT(h3Distance)(start, end);
+int H3_EXPORT(gridPathCells)(H3Index start, H3Index end, H3Index *out) {
+    int distance = H3_EXPORT(gridDistance)(start, end);
     // Early exit if we can't calculate the line
     if (distance < 0) {
         return distance;

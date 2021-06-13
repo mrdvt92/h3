@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Uber Technologies, Inc.
+ * Copyright 2020-2021 Uber Technologies, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@
 
 #include <math.h>
 
-#include "h3Index.h"
+#include "constants.h"
+#include "h3api.h"
+#include "iterators.h"
 #include "test.h"
 #include "utility.h"
 
@@ -32,45 +34,45 @@
  * neighboring cells. Tests positivity and commutativity.
  *
  * Tests the functions:
- *     pointDistRads
- *     pointDistKm
- *     pointDistM
+ *     distanceRads
+ *     distanceKm
+ *     distanceM
  *
- * @param  edge  H3 unidirectional edge denoting neighboring cells
+ * @param  edge  H3 directed edge denoting neighboring cells
  */
 static void haversine_assert(H3Index edge) {
-    GeoCoord a, b;
+    LatLng a, b;
     H3Index origin, destination;
 
-    origin = H3_EXPORT(getOriginH3IndexFromUnidirectionalEdge)(edge);
-    H3_EXPORT(h3ToGeo)(origin, &a);
+    origin = H3_EXPORT(getDirectedEdgeOrigin)(edge);
+    H3_EXPORT(cellToLatLng)(origin, &a);
 
-    destination = H3_EXPORT(getDestinationH3IndexFromUnidirectionalEdge)(edge);
-    H3_EXPORT(h3ToGeo)(destination, &b);
+    destination = H3_EXPORT(getDirectedEdgeDestination)(edge);
+    H3_EXPORT(cellToLatLng)(destination, &b);
 
     char pos[] = "distance between cell centers should be positive";
     char comm[] = "pairwise cell distances should be commutative";
 
     double ab, ba;
 
-    ab = H3_EXPORT(pointDistRads)(&a, &b);
-    ba = H3_EXPORT(pointDistRads)(&b, &a);
+    ab = H3_EXPORT(distanceRads)(&a, &b);
+    ba = H3_EXPORT(distanceRads)(&b, &a);
     t_assert(ab > 0, pos);
     t_assert(ab == ba, comm);
 
-    ab = H3_EXPORT(pointDistKm)(&a, &b);
-    ba = H3_EXPORT(pointDistKm)(&b, &a);
+    ab = H3_EXPORT(distanceKm)(&a, &b);
+    ba = H3_EXPORT(distanceKm)(&b, &a);
     t_assert(ab > 0, pos);
     t_assert(ab == ba, comm);
 
-    ab = H3_EXPORT(pointDistM)(&a, &b);
-    ba = H3_EXPORT(pointDistM)(&b, &a);
+    ab = H3_EXPORT(distanceM)(&a, &b);
+    ba = H3_EXPORT(distanceM)(&b, &a);
     t_assert(ab > 0, pos);
     t_assert(ab == ba, comm);
 
-    t_assert(H3_EXPORT(pointDistKm)(&a, &b) > H3_EXPORT(pointDistRads)(&a, &b),
+    t_assert(H3_EXPORT(distanceKm)(&a, &b) > H3_EXPORT(distanceRads)(&a, &b),
              "measurement in kilometers should be greater than in radians");
-    t_assert(H3_EXPORT(pointDistM)(&a, &b) > H3_EXPORT(pointDistKm)(&a, &b),
+    t_assert(H3_EXPORT(distanceM)(&a, &b) > H3_EXPORT(distanceKm)(&a, &b),
              "measurement in meters should be greater than in kilometers");
 }
 
@@ -119,7 +121,11 @@ static void cell_area_assert(H3Index cell) {
  */
 static void earth_area_test(int res, double (*cell_area)(H3Index),
                             double target, double tol) {
-    double area = mapSumAllCells_double(res, cell_area);
+    double area = 0.0;
+    for (IterCellsResolution iter = iterInitRes(res); iter.h;
+         iterStepRes(&iter)) {
+        area += (*cell_area)(iter.h);
+    }
 
     t_assert(fabs(area - target) < tol,
              "sum of all cells should give earth area");
@@ -127,17 +133,17 @@ static void earth_area_test(int res, double (*cell_area)(H3Index),
 
 SUITE(h3CellAreaExhaustive) {
     TEST(haversine_distances) {
-        iterateAllUnidirectionalEdgesAtRes(0, haversine_assert);
-        iterateAllUnidirectionalEdgesAtRes(1, haversine_assert);
-        iterateAllUnidirectionalEdgesAtRes(2, haversine_assert);
-        iterateAllUnidirectionalEdgesAtRes(3, haversine_assert);
+        iterateAllDirectedEdgesAtRes(0, haversine_assert);
+        iterateAllDirectedEdgesAtRes(1, haversine_assert);
+        iterateAllDirectedEdgesAtRes(2, haversine_assert);
+        iterateAllDirectedEdgesAtRes(3, haversine_assert);
     }
 
     TEST(edge_length) {
-        iterateAllUnidirectionalEdgesAtRes(0, edge_length_assert);
-        iterateAllUnidirectionalEdgesAtRes(1, edge_length_assert);
-        iterateAllUnidirectionalEdgesAtRes(2, edge_length_assert);
-        iterateAllUnidirectionalEdgesAtRes(3, edge_length_assert);
+        iterateAllDirectedEdgesAtRes(0, edge_length_assert);
+        iterateAllDirectedEdgesAtRes(1, edge_length_assert);
+        iterateAllDirectedEdgesAtRes(2, edge_length_assert);
+        iterateAllDirectedEdgesAtRes(3, edge_length_assert);
     }
 
     TEST(cell_area_positive) {
