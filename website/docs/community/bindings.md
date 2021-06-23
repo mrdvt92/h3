@@ -57,8 +57,7 @@ As a C library, bindings can be made to call H3 functions from different program
 
 ## Perl
 
-- [mrdvt92/perl-Geo-H3](https://github.com/mrdvt92/perl-Geo-H3) - Object Oriented API
-- [mrdvt92/perl-Geo-H3-FFI](https://github.com/mrdvt92/perl-Geo-H3-FFI) - Binding using libffi
+- [mrdvt92/perl-Geo-H3](https://metacpan.org/pod/Geo::H3)
 
 ## PHP
 
